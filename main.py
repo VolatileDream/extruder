@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 
 import statemachine as fsm
-import os
-import sys
 
-def perror(val):
-	return
-	print(val, file=sys.stderr)
 
 class Mold(fsm.Machine):
 	states = [ 'Empty', 'Var', 'Exit' ]
 	initial_state = 'Empty'
 
-	def __init__(self, in_io, out, escape_in=b'{{', escape_out=b'}}'):
+	def __init__(self, in_io, out, lookup_func, escape_in=b'{{', escape_out=b'}}', log_func=lambda x: x):
+		self.lookup = lookup_func
 		self.escape_in = escape_in
 		self.escape_out = escape_out
 		self.in_io = in_io
 		self.out = out
 		self.content = b''
+		self.perror = log_func
+
 
 	@fsm.event
 	def advance(self):
@@ -25,9 +23,9 @@ class Mold(fsm.Machine):
 		escape = b''
 		escape_index = 0
 
-		perror( "State : " + self.state )
-		perror( "EscIn : " + str(self.escape_in) )
-		perror( "EscOut: " + str(self.escape_out) )
+		self.perror( "State : " + self.state )
+		self.perror( "EscIn : " + str(self.escape_in) )
+		self.perror( "EscOut: " + str(self.escape_out) )
 
 		while True:
 			input = self.in_io.read(1)
@@ -41,13 +39,13 @@ class Mold(fsm.Machine):
 				yield self.state, 'Exit'
 				return
 
-			perror( "input (" + str(input) + ") == self.escape_in[0]): " + str(input[0] == self.escape_in[0]) )
+			self.perror( "input (" + str(input) + ") == self.escape_in[0]): " + str(input[0] == self.escape_in[0]) )
 				
 			if self.state == 'Empty' and input[0] == self.escape_in[escape_index]:
 				escape += input
 				escape_index += 1
 
-				perror("Partial EscIn: " + str(escape) )
+				self.perror("Partial EscIn: " + str(escape) )
 
 				if escape_index == len(self.escape_in):
 					escape = b''
@@ -58,7 +56,7 @@ class Mold(fsm.Machine):
 				escape += input
 				escape_index += 1
 
-				perror("Partial EscOut: " + str(escape) )
+				self.perror("Partial EscOut: " + str(escape) )
 
 				if escape_index == len(self.escape_out):
 					escape = b''
@@ -82,19 +80,20 @@ class Mold(fsm.Machine):
 	@fsm.transition_to('Var')
 	@fsm.transition_to('Exit')
 	def log(self):
-		perror("Transition: " + self.state )
+		self.perror("Transition: " + self.state )
 
 
 	@fsm.transition_from('Var')
 	def output_var(self):
+
 		search = str(self.content, "UTF-8")
-		found = os.environ.get( search, b'' )
+		found = self.lookup( search, self.out )
 
-		perror("Searching for: " + search )
-		perror("Found : " + found )
+		if found:
+			self.content = bytes(found, "UTF-8")
+			self.output()
 
-		self.content = bytes(found, "UTF-8")
-		self.output()
+		self.content = b''
 
 
 	@fsm.transition_from('Empty')
@@ -104,12 +103,29 @@ class Mold(fsm.Machine):
 		self.content = b''
 
 
+import os
+import subprocess
+import sys
+
+def env_lookup(search, _io_out):
+	return os.environ.get( search, b'' )
+
+
+def system_lookup(search, io_out ):
+	retval = subprocess.call( search, stdout=io_out, shell=True )
+
+	if retval != 0:
+		raise Exception("Error building template, sub-process failure: '" + search + "'" )
+
+	return None
+
+
 if __name__ == "__main__":
 
 	sys.stdin = sys.stdin.detach()
 	sys.stdout = sys.stdout.detach()
 
-	m = Mold(sys.stdin, sys.stdout)
+	m = Mold(sys.stdin, sys.stdout, system_lookup)
 
 	while m.state != 'Exit':
 		m.advance()
