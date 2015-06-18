@@ -85,6 +85,8 @@ class Mold(fsm.Machine):
 
 	@fsm.transition_from('Var')
 	def output_var(self):
+		# in case they write to self.out
+		self.out.flush()
 
 		search = str(self.content, "UTF-8")
 		found = self.lookup( search, self.out )
@@ -108,6 +110,8 @@ import subprocess
 import sys
 
 def env_lookup(search, _io_out):
+	# So that "clean" code can get written
+	search = search.lstrip().rstrip()
 	return os.environ.get( search, b'' )
 
 
@@ -120,12 +124,30 @@ def system_lookup(search, io_out ):
 	return None
 
 
+import argparse
+
+def arg_parser():
+	parser = argparse.ArgumentParser()
+
+	parser.add_argument('-s', '--system', dest='use_system', action='store_true')
+
+	return parser
+
+
 if __name__ == "__main__":
+
+	parser = arg_parser()
+
+	args = parser.parse_args()
+
+	lookup_func = env_lookup
+	if args.use_system:
+		lookup_func = system_lookup
 
 	sys.stdin = sys.stdin.detach()
 	sys.stdout = sys.stdout.detach()
 
-	m = Mold(sys.stdin, sys.stdout, system_lookup)
+	m = Mold(sys.stdin, sys.stdout, lookup_func)
 
 	while m.state != 'Exit':
 		m.advance()
