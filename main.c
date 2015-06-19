@@ -19,6 +19,8 @@ void read_char( chan out ){
     char in_buffer[ 4096 ];
     ssize_t in_len = read(0, in_buffer, sizeof(in_buffer));
 
+    fprintf(stderr, "some stuff: %c\n", in_buffer[0]);
+
     if( in_len <= 0 ){
       break;
     }

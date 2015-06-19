@@ -1,5 +1,8 @@
 
-all: extruder
+all: extruder test
+
+test: extruder
+	echo "{{ ls }}" | ./extruder
 
 libmill/configure :
 	cd libmill ; ./autogen.sh
