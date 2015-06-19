@@ -1,0 +1,3 @@
+[submodule "libmill"]
+	path = libmill
+	url = git@github.com:sustrik/libmill.git

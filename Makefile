@@ -1,3 +1,14 @@
 
-extruder:
-	gcc -static -O3 -std=c99 -I . main.c -L . -lmill -o extruder
+all: extruder
+
+libmill/configure :
+	cd libmill ; ./autogen.sh
+
+libmill/Makefile : libmill/configure
+	cd libmill ; ./configure
+
+libmill/.libs/libmill.a : libmill/Makefile
+	cd libmill ; make check
+
+extruder: libmill/.libs/libmill.a
+	gcc -static -O3 -std=c99 -I . main.c -L libmill/.libs/ -lmill -o extruder
